@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styled from "@emotion/styled";
 
 import { ReactComponent as CloudyIcon } from "./images/day-cloudy.svg";
 import { ReactComponent as AirFlowIcon } from "./images/airFlow.svg";
 import { ReactComponent as RainIcon } from "./images/rain.svg";
 import { ReactComponent as RedoIcon } from "./images/refresh.svg";
+import WeatherIcon from "./WeatherIcon";
 
 const Container = styled.div`
   background-color: #ededed;
@@ -105,6 +106,60 @@ const Redo = styled.div`
   }
 `;
 
+const fetchCurrentWeather = () => {
+  return fetch(
+    "https://opendata.cwb.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization=CWB-507B37E0-0383-4D8C-878D-628B54EC3536&locationName=臺北"
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      const locationData = data.records.location[0];
+
+      const weatherElements = locationData.weatherElement.reduce(
+        (neededElements, item) => {
+          if (["WDSD", "TEMP", "HUMD"].includes(item.elementName)) {
+            neededElements[item.elementName] = item.elementValue;
+          }
+          return neededElements;
+        },
+        {}
+      );
+
+      return {
+        observationTime: locationData.time.obsTime,
+        locationName: locationData.locationName,
+        temperature: weatherElements.TEMP,
+        windSpeed: weatherElements.WDSD,
+        humid: weatherElements.HUMD,
+      };
+    });
+};
+
+const fetchWeatherForecast = () => {
+  return fetch(
+    "https://opendata.cwb.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=CWB-507B37E0-0383-4D8C-878D-628B54EC3536&locationName=臺北市"
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      const locationData = data.records.location[0];
+      const weatherElements = locationData.weatherElement.reduce(
+        (neededElements, item) => {
+          if (["Wx", "PoP", "CI"].includes(item.elementName)) {
+            neededElements[item.elementName] = item.time[0].parameter;
+          }
+          return neededElements;
+        },
+        {}
+      );
+
+      return {
+        description: weatherElements.Wx.parameterName,
+        weatherCode: weatherElements.Wx.parameterValue,
+        rainPossibility: weatherElements.PoP.parameterName,
+        comfortability: weatherElements.CI.parameterName,
+      };
+    });
+};
+
 const WeatherApp = () => {
   console.log("invoke function component");
   const [weatherElement, setWeatherElement] = useState({
@@ -119,77 +174,26 @@ const WeatherApp = () => {
     comfortability: "",
   });
 
-  const fetchData = async () =>{
-    const [currentWeather, weatherForecast] = await Promise.all([
-      fetchCurrentWeather(),
-      fetchWeatherForecast(),
-    ]);
-    setWeatherElement({
-      ...currentWeather,
-      ...weatherForecast,
-    });
-  };
+  const fetchData = useCallback(() => {
+    const fetchingData = async () => {
+      const [currentWeather, weatherForecast] = await Promise.all([
+        fetchCurrentWeather(),
+        fetchWeatherForecast(),
+      ]);
+      setWeatherElement({
+        ...currentWeather,
+        ...weatherForecast,
+      });
+    };
 
-  useEffect(() => {
-    console.log('execute function in useEffect');
-    fetchData();
+    fetchingData();
   }, []);
 
-  const fetchCurrentWeather = () => {
-    return fetch(
-      "https://opendata.cwb.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization=CWB-507B37E0-0383-4D8C-878D-628B54EC3536&locationName=臺北"
-    )
-      .then((response) => response.json())
-      .then((data) => {
-        const locationData = data.records.location[0];
+  useEffect(() => {
+    console.log("execute function in useEffect");
+    fetchData();
+  }, [fetchData]);
 
-        const weatherElements = locationData.weatherElement.reduce(
-          (neededElements, item) => {
-            if (["WDSD", "TEMP", "HUMD"].includes(item.elementName)) {
-              neededElements[item.elementName] = item.elementValue;
-            }
-            return neededElements;
-          },
-          {}
-        );
-
-        return {
-          observationTime: locationData.time.obsTime,
-          locationName: locationData.locationName,
-          temperature: weatherElements.TEMP,
-          windSpeed: weatherElements.WDSD,
-          humid: weatherElements.HUMD,
-        };
-      });
-  };
-
-  const fetchWeatherForecast = () => {
-    return fetch(
-      "https://opendata.cwb.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=CWB-507B37E0-0383-4D8C-878D-628B54EC3536&locationName=臺北市"
-    )
-      .then((response) => response.json())
-      .then((data) => {
-        const locationData = data.records.location[0];
-        const weatherElements = locationData.weatherElement.reduce(
-          (neededElements, item) => {
-            if (["Wx", "PoP", "CI"].includes(item.elementName)) {
-              neededElements[item.elementName] = item.time[0].parameter;
-            }
-            return neededElements;
-          },
-          {}
-        );
-
-        return {
-          description: weatherElements.Wx.parameterName,
-          weatherCode: weatherElements.Wx.parameterValue,
-          rainPossibility: weatherElements.PoP.parameterName,
-          comfortability: weatherElements.CI.parameterName,
-        };
-      });
-  };
-
-  
   return (
     <Container>
       {console.log("render")}
@@ -203,7 +207,10 @@ const WeatherApp = () => {
             {Math.round(weatherElement.temperature)}
             <Celsius>°C</Celsius>
           </Temperature>
-          <Cloudy />
+          <WeatherIcon
+            currentWeatherCode={weatherElement.weatherCode}
+            moment="night"
+          />
         </CurrentWeather>
         <AirFlow>
           <AirFlowIcon />
@@ -214,9 +221,7 @@ const WeatherApp = () => {
           {weatherElement.rainPossibility}%
         </Rain>
 
-        <Redo
-          onClick={fetchData}
-        >
+        <Redo onClick={fetchData}>
           最後觀測時間：
           {new Intl.DateTimeFormat("zh-TW", {
             hour: "numeric",
