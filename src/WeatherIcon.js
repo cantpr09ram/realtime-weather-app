@@ -27,14 +27,6 @@ const weatherTypes = {
   isSnowing: [23, 37, 42],
 };
 
-const IconContainer = styled.div`
-  flex-basis: 30%;
-
-  svg {
-    max-height: 110px;
-  }
-`;
-
 const weatherIcons = {
   day: {
     isThunderstorm: <DayThunderstorm />,
@@ -56,22 +48,31 @@ const weatherIcons = {
   },
 };
 
-const weatherCode2Type = (weatherCode) => {
-  const [weatherType] =
-    Object.entries(weatherTypes).find(([weatherType, weatherCodes]) =>
-      weatherCodes.includes(Number(weatherCode))
-    ) || [];
+const IconContainer = styled.div`
+  flex-basis: 30%;
 
-  return weatherType;
-};
+  svg {
+    max-height: 110px;
+  }
+`;
+
+const weatherCode2Type = (weatherCode) =>
+  Object.entries(weatherTypes).reduce(
+    (currentWeatherType, [weatherType, weatherCodes]) =>
+      weatherCodes.includes(Number(weatherCode))
+        ? weatherType
+        : currentWeatherType,
+    ""
+  );
 
 const WeatherIcon = ({ currentWeatherCode, moment }) => {
   const [currentWeatherIcon, setCurrentWeatherIcon] = useState("isClear");
 
-  const theWeatherIcon = useMemo(() => weatherCode2Type(currentWeatherCode), [
-    currentWeatherCode,
-  ]);
-  
+  const theWeatherIcon = useMemo(
+    () => weatherCode2Type(currentWeatherCode),
+    [currentWeatherCode]
+  );
+
   useEffect(() => {
     setCurrentWeatherIcon(theWeatherIcon);
   }, [theWeatherIcon]);
